@@ -840,7 +840,7 @@ function saveInlineForm(pid) {
 
   updateAllBadges();
   buildPendingList();
-  showToast('Saved — edit anytime from All Records tab');
+  showToast('Diagnosis saved ✓');
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1057,7 +1057,7 @@ function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   clearTimeout(toastT);
-  toastT = setTimeout(() => t.classList.remove('show'), 2800);
+  toastT = setTimeout(() => t.classList.remove('show'), 1800);
 }
 
 // ═══════════════════════════════════════════════════════
