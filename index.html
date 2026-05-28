@@ -204,12 +204,65 @@ textarea.input{resize:vertical;min-height:70px;line-height:1.5;}
 
   <!-- SCREEN R1: READY TO RECORD -->
   <div id="rscreen1">
+
     <div class="card">
-      <div class="card-title">New consultation</div>
+      <div class="card-title">Patient information</div>
+
       <div class="field">
-        <label class="label">Patient reference (no name — use ID or brief description)</label>
-        <input class="input" id="patientRef" placeholder="e.g. female, 30s, stomach complaint">
+        <label class="label">Age band</label>
+        <div class="seg" id="seg-age">
+          <button class="seg-item on" onclick="setSeg(this,'seg-age')">18–35</button>
+          <button class="seg-item" onclick="setSeg(this,'seg-age')">36–55</button>
+          <button class="seg-item" onclick="setSeg(this,'seg-age')">56+</button>
+        </div>
       </div>
+
+      <div class="field">
+        <label class="label">Gender</label>
+        <div class="seg" id="seg-gender">
+          <button class="seg-item" onclick="setSeg(this,'seg-gender')">Woman</button>
+          <button class="seg-item on" onclick="setSeg(this,'seg-gender')">Man</button>
+          <button class="seg-item" onclick="setSeg(this,'seg-gender')">Other</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="label">Education level</label>
+        <select class="input select" id="edu">
+          <option>Illiterate</option>
+          <option>Primary school</option>
+          <option selected>Secondary school</option>
+          <option>Graduate</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label class="label">Primary language</label>
+        <div class="seg" id="seg-lang">
+          <button class="seg-item on" onclick="setSeg(this,'seg-lang')">Assamese</button>
+          <button class="seg-item" onclick="setSeg(this,'seg-lang')">Hindi</button>
+          <button class="seg-item" onclick="setSeg(this,'seg-lang')">Bengali</button>
+          <button class="seg-item" onclick="setSeg(this,'seg-lang')">Mixed</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="label">Family member present?</label>
+        <div class="seg" id="seg-fam">
+          <button class="seg-item" onclick="setSeg(this,'seg-fam')">Yes</button>
+          <button class="seg-item on" onclick="setSeg(this,'seg-fam')">No</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Consultation details</div>
+
+      <div class="field">
+        <label class="label">Chief complaint (brief — no patient name)</label>
+        <input class="input" id="chiefComplaint" placeholder="e.g. abdominal pain, fever, cough">
+      </div>
+
       <div class="field">
         <label class="label">Consultation type</label>
         <div class="seg" id="seg-ctype">
@@ -219,6 +272,7 @@ textarea.input{resize:vertical;min-height:70px;line-height:1.5;}
         </div>
       </div>
     </div>
+
     <button class="btn-primary navy" onclick="goRScreen(2)">Start consultation →</button>
   </div>
 
@@ -605,19 +659,24 @@ function stopRec() {
   }, 800);
 
   // Save draft record (pending diagnosis)
-  const patRef = document.getElementById('patientRef').value || 'Not specified';
   const ctype = document.querySelector('#seg-ctype .on')?.textContent || 'OPD';
   currentRecord = {
     pid: currentPid,
     date: new Date().toISOString().slice(0,10),
     createdAt: new Date().toISOString(),
     doctorId: currentDoctorId,
-    patientRef: patRef,
+    // demographic fields
+    ageBand: document.querySelector('#seg-age .on')?.textContent || '18-35',
+    gender: document.querySelector('#seg-gender .on')?.textContent || 'Man',
+    education: document.getElementById('edu')?.value || 'Secondary school',
+    language: document.querySelector('#seg-lang .on')?.textContent || 'Assamese',
+    familyPresent: document.querySelector('#seg-fam .on')?.textContent === 'Yes',
+    chiefComplaint: document.getElementById('chiefComplaint')?.value.trim() || '',
     consultationType: ctype,
     durationSec: recSecs,
     audioFilename: filename,
     hasAudio: true,
-    diagnosisStatus: 'pending',  // ← KEY FIELD
+    diagnosisStatus: 'pending',
     diagnosis: '',
     icdCode: '',
     complaintCaptured: 'Yes, fully',
@@ -720,8 +779,18 @@ function newConsult() {
   audioBlob = null; audioChunks = [];
   clearInterval(recInterval); clearInterval(waveInterval);
   document.getElementById('recTimer').textContent = '00:00';
-  document.getElementById('patientRef').value = '';
+  document.getElementById('chiefComplaint').value = '';
   document.getElementById('diagInput').value = '';
+  // reset seg buttons to defaults
+  ['seg-age','seg-gender','seg-lang','seg-fam','seg-ctype'].forEach(id => {
+    const grp = document.getElementById(id);
+    if (!grp) return;
+    grp.querySelectorAll('.seg-item').forEach((b,i) => b.classList.toggle('on', i===0));
+    // seg-gender default = Man (index 1), seg-fam default = No (index 1)
+    if (id === 'seg-gender' || id === 'seg-fam') {
+      grp.querySelectorAll('.seg-item').forEach((b,i) => b.classList.toggle('on', i===1));
+    }
+  });
   document.getElementById('missingInfo').value = '';
   document.getElementById('scoreNum').textContent = '3';
   document.getElementById('scoreDesc').textContent = scoreTxts[3];
@@ -761,7 +830,8 @@ function buildPendingList() {
           <div class="rec-card-pid">${r.pid}</div>
           <div class="rec-card-meta">
             ${r.date} · ${r.consultationType} · ${fmt(r.durationSec||0)} min<br>
-            Patient: ${r.patientRef || 'Not specified'}
+            ${r.gender||''} · ${r.ageBand||''} · ${r.language||''}<br>
+            ${r.chiefComplaint ? 'CC: ' + r.chiefComplaint : 'No chief complaint recorded'}
           </div>
         </div>
         <span class="badge amber">Diagnosis pending</span>
@@ -866,7 +936,8 @@ function buildAllList() {
           <div class="rec-card-pid">${r.pid}</div>
           <div class="rec-card-meta">
             ${r.date} · ${r.consultationType} · ${fmt(r.durationSec||0)} min<br>
-            ${r.diagnosis ? 'Dx: ' + r.diagnosis : 'No diagnosis yet'}
+            ${r.gender||''} · ${r.ageBand||''} · ${r.language||''}<br>
+            ${r.chiefComplaint ? 'CC: ' + r.chiefComplaint : ''} ${r.diagnosis ? '· Dx: ' + r.diagnosis : ''}
           </div>
         </div>
         <span class="badge ${r.diagnosisStatus === 'complete' ? 'green' : 'amber'}">
@@ -1011,9 +1082,9 @@ function exportAllJSON() {
 }
 function exportAllCSV() {
   const recs = loadRecords();
-  const hdr = 'pid,date,doctor_id,patient_ref,consultation_type,duration_sec,diagnosis,complaint_captured,quality_score,missing_info,status';
+  const hdr = 'pid,date,doctor_id,age_band,gender,education,language,family_present,chief_complaint,consultation_type,duration_sec,diagnosis,complaint_captured,quality_score,missing_info,status';
   const rows = recs.map(r =>
-    `"${r.pid}","${r.date}","${r.doctorId}","${r.patientRef}","${r.consultationType}",${r.durationSec},"${r.diagnosis}","${r.complaintCaptured}",${r.qualityScore},"${r.missingInfo}","${r.diagnosisStatus}"`);
+    `"${r.pid}","${r.date}","${r.doctorId}","${r.ageBand||''}", "${r.gender||''}", "${r.education||''}", "${r.language||''}", ${r.familyPresent||false},"${r.chiefComplaint||''}", "${r.consultationType}",${r.durationSec},"${r.diagnosis}","${r.complaintCaptured}",${r.qualityScore},"${r.missingInfo}","${r.diagnosisStatus}"`);
   downloadBlob(new Blob([[hdr,...rows].join('\n')], {type:'text/csv'}), 'MedDialogue_Doctor_' + currentDoctorId + '.csv');
   showToast('CSV exported');
 }
