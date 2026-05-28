@@ -571,6 +571,8 @@ function switchTab(name) {
   });
   if (name === 'pending') buildPendingList();
   if (name === 'all') buildAllList();
+  currentTab = name;
+  pushState('tab-'+name);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -579,6 +581,8 @@ function switchTab(name) {
 function goRScreen(n) {
   [1,2,3].forEach(i => document.getElementById('rscreen'+i).style.display = i===n?'':'none');
   window.scrollTo(0,0);
+  currentRScreen = n;
+  pushState('rscreen'+n);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1196,20 +1200,7 @@ function handleBack() {
   }
 }
 
-// Override goRScreen and switchTab to track state
-const _goRScreen = goRScreen;
-function goRScreen(n) {
-  currentRScreen = n;
-  _goRScreen(n);
-  pushState('rscreen' + n);
-}
-
-const _switchTab = switchTab;
-function switchTab(name) {
-  currentTab = name;
-  _switchTab(name);
-  pushState('tab-' + name);
-}
+// State tracking merged into goRScreen and switchTab above
 
 window.addEventListener('DOMContentLoaded', () => {
   const logged = checkSession();
