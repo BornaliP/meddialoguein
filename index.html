@@ -462,6 +462,58 @@ button,input,select,textarea{font-family:var(--font);}
 <!-- TOAST -->
 <div id="toast"></div>
 
+<!-- ═══ LOCK SCREEN ═══ -->
+<div id="lockScreen" style="
+  position:fixed;inset:0;z-index:9999;
+  background:var(--navy);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:32px 24px;
+">
+  <div style="width:100%;max-width:340px;">
+    <div style="text-align:center;margin-bottom:32px;">
+      <div style="
+        width:64px;height:64px;border-radius:50%;
+        background:rgba(13,158,138,0.15);
+        border:2px solid var(--teal);
+        display:flex;align-items:center;justify-content:center;
+        margin:0 auto 16px;font-size:26px;
+      ">🔒</div>
+      <div style="color:#fff;font-size:20px;font-weight:600;letter-spacing:-0.3px;">MedDialogue-IN</div>
+      <div style="color:rgba(255,255,255,0.45);font-size:12px;margin-top:4px;">Authorised access only</div>
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <label style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.4);letter-spacing:0.08em;text-transform:uppercase;display:block;margin-bottom:6px;">Collector ID</label>
+      <input id="lockUser" type="text" placeholder="e.g. DC-07"
+        style="width:100%;padding:11px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.07);color:#fff;font-size:14px;font-family:var(--font);"
+        onkeydown="if(event.key==='Enter')document.getElementById('lockPass').focus()">
+    </div>
+
+    <div style="margin-bottom:20px;">
+      <label style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.4);letter-spacing:0.08em;text-transform:uppercase;display:block;margin-bottom:6px;">Password</label>
+      <div style="position:relative;">
+        <input id="lockPass" type="password" placeholder="Enter password"
+          style="width:100%;padding:11px 40px 11px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.07);color:#fff;font-size:14px;font-family:var(--font);"
+          onkeydown="if(event.key==='Enter')tryUnlock()">
+        <span onclick="togglePassVis()" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:16px;opacity:0.5;" id="passEye">👁</span>
+      </div>
+    </div>
+
+    <div id="lockError" style="display:none;background:rgba(224,92,58,0.2);border:1px solid rgba(224,92,58,0.4);border-radius:8px;padding:10px 14px;font-size:13px;color:#FBBFB0;margin-bottom:12px;text-align:center;"></div>
+
+    <button onclick="tryUnlock()" style="
+      width:100%;padding:13px;border-radius:8px;border:none;
+      background:var(--teal);color:#fff;font-size:14px;font-weight:600;
+      font-family:var(--font);cursor:pointer;
+    ">Unlock app</button>
+
+    <div id="attemptsNote" style="text-align:center;font-size:11px;color:rgba(255,255,255,0.25);margin-top:16px;">
+      Contact PI for access credentials
+    </div>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════════════
 // STATE
@@ -1073,15 +1125,99 @@ function showToast(msg) {
 }
 
 // ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// ACCESS CONTROL
+// ═══════════════════════════════════════════════════════
+
+// ─── CONFIGURE YOUR USERS HERE ─────────────────────────
+// Format: 'CollectorID': 'password'
+// Change these before deploying to field collectors.
+const USERS = {
+  'DC-01': 'meddata2025',
+  'DC-02': 'meddata2025',
+  'PI':    'piresearch25',
+};
+// ─── END CONFIGURATION ─────────────────────────────────
+
+const SESSION_KEY = 'mdIN_session';
+let lockAttempts = 0;
+let lockoutUntil = 0;
+
+function hashStr(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = Math.imul(31, h) + str.charCodeAt(i) | 0;
+  return h.toString(16);
+}
+
+function tryUnlock() {
+  const now = Date.now();
+  if (now < lockoutUntil) {
+    const secs = Math.ceil((lockoutUntil - now) / 1000);
+    showLockError('Too many attempts. Wait ' + secs + ' seconds.'); return;
+  }
+  const userId = document.getElementById('lockUser').value.trim();
+  const pass   = document.getElementById('lockPass').value;
+  const userKey = Object.keys(USERS).find(k => k.toUpperCase() === userId.toUpperCase());
+
+  if (userKey && USERS[userKey] === pass) {
+    lockAttempts = 0;
+    sessionStorage.setItem(SESSION_KEY, hashStr(userKey + USERS[userKey]));
+    document.getElementById('lockScreen').style.display = 'none';
+    const cidField = document.getElementById('collectorId');
+    if (cidField) cidField.value = userKey;
+    document.getElementById('collectorBadge').textContent = 'Collector: ' + userKey + ' · GHY';
+    initPid();
+  } else {
+    lockAttempts++;
+    const rem = 5 - lockAttempts;
+    if (lockAttempts >= 5) {
+      lockoutUntil = Date.now() + 60000;
+      lockAttempts = 0;
+      showLockError('Too many attempts. Locked for 60 seconds.');
+    } else {
+      showLockError('Wrong credentials. ' + rem + ' attempt' + (rem !== 1 ? 's' : '') + ' left.');
+    }
+    document.getElementById('lockPass').value = '';
+    document.getElementById('lockPass').focus();
+  }
+}
+
+function showLockError(msg) {
+  const el = document.getElementById('lockError');
+  el.style.display = 'block'; el.textContent = msg;
+}
+
+function togglePassVis() {
+  const inp = document.getElementById('lockPass');
+  const eye = document.getElementById('passEye');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  eye.style.opacity = inp.type === 'text' ? '0.9' : '0.5';
+}
+
+function checkSession() {
+  const s = sessionStorage.getItem(SESSION_KEY);
+  if (!s) return null;
+  return Object.keys(USERS).find(k => hashStr(k + USERS[k]) === s) || null;
+}
+
+// ═══════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', () => {
+  const loggedIn = checkSession();
+  if (loggedIn) {
+    document.getElementById('lockScreen').style.display = 'none';
+    const cidField = document.getElementById('collectorId');
+    if (cidField) cidField.value = loggedIn;
+    document.getElementById('collectorBadge').textContent = 'Collector: ' + loggedIn + ' · GHY';
+  } else {
+    setTimeout(() => document.getElementById('lockUser').focus(), 100);
+  }
   initPid();
   updateSyncBar();
   buildGuide();
-  // Check if mic API available
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    document.getElementById('micBanner').textContent = '⚠️ This browser does not support microphone recording. Use Chrome on Android.';
+    document.getElementById('micBanner').textContent = '⚠️ Use Chrome on Android for microphone recording.';
   }
 });
 </script>
