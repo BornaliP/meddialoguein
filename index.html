@@ -149,8 +149,8 @@ textarea.input{resize:vertical;min-height:70px;line-height:1.5;}
 #lockError{display:none;background:rgba(224,92,58,.2);border:1px solid rgba(224,92,58,.4);border-radius:8px;padding:10px 14px;font-size:13px;color:#FBBFB0;margin-bottom:12px;text-align:center;}
 
 /* TOAST */
-#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--navy);color:#fff;padding:10px 20px;border-radius:24px;font-size:13px;font-weight:500;z-index:9998;transition:transform .3s;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.2);}
-#toast.show{transform:translateX(-50%) translateY(0);}
+#toast{position:fixed;bottom:76px;left:16px;right:16px;transform:translateY(100px);background:rgba(15,39,68,0.95);color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:500;z-index:99999;transition:transform .25s ease;pointer-events:none;text-align:center;}
+#toast.show{transform:translateY(0);}
 
 /* SECTION HEADER */
 .section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
@@ -692,7 +692,7 @@ function stopRec() {
 
   goRScreen(3);
   updateAllBadges();
-  showToast('Recording saved — fill diagnosis below');
+  showToast('Recording saved');
 }
 
 function setRecUI(state) {
@@ -1128,7 +1128,7 @@ function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   clearTimeout(toastT);
-  toastT = setTimeout(() => t.classList.remove('show'), 1800);
+  toastT = setTimeout(() => t.classList.remove('show'), 1400);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1139,8 +1139,76 @@ function initApp() {
   document.getElementById('recPid').textContent = currentPid;
   updateAllBadges();
   if (!navigator.mediaDevices?.getUserMedia) {
-    document.getElementById('micBanner').textContent = '⚠️ Use Chrome on Android for microphone recording.';
+    document.getElementById('micBanner').textContent = '\u26a0\ufe0f Use Chrome on Android for microphone recording.';
   }
+  initBackButton();
+}
+
+// ── ANDROID BACK BUTTON HANDLER ───────────────────────
+// Push a dummy history state so the back button has
+// somewhere to go. On popstate (back press), we handle
+// navigation internally instead of exiting the app.
+let currentTab = 'record';
+let currentRScreen = 1;
+
+function pushState(label) {
+  history.pushState({ page: label }, '');
+}
+
+function initBackButton() {
+  // Push initial state so first back press is caught
+  history.pushState({ page: 'home' }, '');
+
+  window.addEventListener('popstate', function(e) {
+    // Back was pressed — handle internally
+    handleBack();
+    // Always push a new state so the next back press is also caught
+    history.pushState({ page: 'current' }, '');
+  });
+}
+
+function handleBack() {
+  // If on a sub-screen within Record tab, go back one screen
+  if (currentTab === 'record') {
+    if (currentRScreen === 2) {
+      // On recording screen — go back to patient info
+      // Only if not currently recording
+      if (isRec || isPaused) {
+        showToast('Stop recording first');
+        return;
+      }
+      goRScreen(1);
+      return;
+    }
+    if (currentRScreen === 3) {
+      // On diagnosis screen — if recording done, warn before going back
+      goRScreen(2);
+      return;
+    }
+    // On screen 1 of record tab — already at root, do nothing
+    showToast('You are at the home screen');
+    return;
+  }
+  // If on Pending or All Records tab, go back to Record tab
+  if (currentTab === 'pending' || currentTab === 'all') {
+    switchTab('record');
+    return;
+  }
+}
+
+// Override goRScreen and switchTab to track state
+const _goRScreen = goRScreen;
+function goRScreen(n) {
+  currentRScreen = n;
+  _goRScreen(n);
+  pushState('rscreen' + n);
+}
+
+const _switchTab = switchTab;
+function switchTab(name) {
+  currentTab = name;
+  _switchTab(name);
+  pushState('tab-' + name);
 }
 
 window.addEventListener('DOMContentLoaded', () => {
